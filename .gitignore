@@ -1,0 +1,12 @@
+input*
+output*
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+.vscode/
+.idea/
+*.swp
+*.swo
