@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <cuda.h>
+#include <cuda_runtime.h>
 #include <chrono>
 #include <string>
 #include <cstring>
@@ -9,7 +10,32 @@ using namespace std;
 
 __global__ void blurKernel(int *in, int *out, int N, int M)
 {
-    // write logic of the kernel.
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row >= N || col >= M)
+        return;
+
+    int sum = 0;
+    int count = 0;
+
+    for (int dy = -1; dy <= 1; dy++)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            int nRow = row + dy;
+            int nCol = col + dx;
+
+            if (nRow >= 0 && nRow < N && nCol >= 0 && nCol < M)
+            {
+                sum += in[nRow * M + nCol];
+                count++;
+            }
+        }
+    }
+
+    int denom = count;
+    out[row * M + col] = (sum + denom - 1) / denom; // ceiling of average
 }
 
 int main(int argc, char **argv)
@@ -72,12 +98,22 @@ int main(int argc, char **argv)
 
     // Allocate memory to the GPU for input matrix and output matrix and store the address in d_in and d_out
     //  initalize the momory reserved in GPU.
+    cudaMalloc(&d_in, size * sizeof(int));
+    cudaMalloc(&d_out, size * sizeof(int));
+
+    cudaMemcpy(d_in, h_in, size * sizeof(int), cudaMemcpyHostToDevice);
 
     auto t_start = chrono::high_resolution_clock::now();
 
     /*
         Define the threads configurations and launch the kernel
     */
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((M + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (N + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    blurKernel<<<numBlocks, threadsPerBlock>>>(d_in, d_out, N, M);
+    cudaDeviceSynchronize();
 
     // Do not change anything above this line
     auto t_end = chrono::high_resolution_clock::now();
